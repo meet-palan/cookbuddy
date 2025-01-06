@@ -14,7 +14,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-//
+
   Future<Database> _getDatabase() async {
     final databasePath = await getDatabasesPath();
     return openDatabase(
