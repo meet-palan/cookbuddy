@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-//import '../user/login_screen.dart';
-//import '../admin/login_screen.dart';
+import '../user/login_screen.dart';
+import '../admin/login_screen.dart';
 
 class GetStartedScreen extends StatelessWidget {
   @override
@@ -28,7 +28,7 @@ class GetStartedScreen extends StatelessWidget {
             SizedBox(height: 30),
             ElevatedButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => UserLoginScreen()));
               },
               child: Text('User Login'),
             ),
