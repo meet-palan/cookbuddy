@@ -22,6 +22,7 @@ class DatabaseHelper {
     );
   }
 
+
   Future _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE Users(
@@ -71,5 +72,36 @@ class DatabaseHelper {
         FOREIGN KEY(recipeId) REFERENCES Recipes(id)
       )
     ''');
+    await db.execute('''
+      CREATE TABLE admin (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL
+      )
+    ''');
+
+    // Insert predefined admin records
+    await db.insert('admin', {'email': 'meet@gmail.com', 'password': 'meet06'});
+    await db.insert('admin', {'email': 'ritik@gmail.com', 'password': 'ritik02'});
+    await db.insert('admin', {'email': 'nandan@gmail.com', 'password': 'nandan18'});
+  }
+  /// Validate Admin Credentials
+  Future<bool> validateAdminCredentials(String email, String password) async {
+    final db = await database;
+    final List<Map<String, dynamic>> result = await db.query(
+      'admin',
+      where: 'email = ? AND password = ?',
+      whereArgs: [email, password],
+    );
+
+    return result.isNotEmpty;
+  }
+
+  /// Close the database (optional for cleanup)
+  Future<void> closeDatabase() async {
+    final db = await _database;
+    if (db != null) {
+      await db.close();
+    }
   }
 }
