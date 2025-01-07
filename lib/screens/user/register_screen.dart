@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -49,19 +48,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _isLoading = false;
         });
 
-        ScaffoldMessenger.of(context as BuildContext).showSnackBar(
-          SnackBar(content: Text("Registration successful!")),
-        );
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context as BuildContext).showSnackBar(
+            SnackBar(content: Text("Registration successful! Please login.")),
+          );
 
-        Navigator.push(context as BuildContext, MaterialPageRoute(builder: (context) => UserLoginScreen()));
+          // Navigate to login screen
+          Navigator.pushReplacement(
+            context as BuildContext,
+            MaterialPageRoute(builder: (context) => UserLoginScreen()),
+          );
+        }
       } catch (error) {
         setState(() {
           _isLoading = false;
         });
 
-        ScaffoldMessenger.of(context as BuildContext).showSnackBar(
-          SnackBar(content: Text("Failed to register. Please try again.")),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context as BuildContext).showSnackBar(
+            SnackBar(content: Text("Failed to register. Please try again.")),
+          );
+        }
       }
     }
   }
@@ -109,7 +117,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
-                    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
+                    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                        .hasMatch(value)) {
                       return 'Please enter a valid email';
                     }
                     return null;
