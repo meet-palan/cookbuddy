@@ -10,7 +10,7 @@ class AdminLoginScreen extends StatefulWidget {
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
   void _submit() async {
     String email = _emailController.text.trim();
@@ -24,10 +24,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     try {
       bool isValid = await _dbHelper.validateAdminCredentials(email, password);
       if (isValid) {
-        Navigator.pushReplacement(
-          context,
-          //MaterialPageRoute(builder: (context) => AdminDashboardScreen()),
-        );
+        //Navigator.push(context as BuildContext, MaterialPageRoute(builder: (context) => SearchScreen()));
       } else {
         _showMessage("Invalid email or password");
       }

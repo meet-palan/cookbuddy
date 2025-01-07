@@ -1,3 +1,4 @@
+import 'package:cookbuddy/screens/user/home_screen.dart';
 import 'package:cookbuddy/screens/user/register_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -38,17 +39,22 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
         _isLoading = true;
       });
 
-      bool isValid = await _validateUser(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
+      bool isValid = await _validateUser(email, password);
 
       setState(() {
         _isLoading = false;
       });
 
       if (isValid) {
-        //Navigator.pushReplacementNamed(context as BuildContext, '/home');
+        Navigator.push(
+          context as BuildContext,
+          MaterialPageRoute(
+            builder: (context) => UserHomeScreen(userEmail: email),
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context as BuildContext).showSnackBar(
           SnackBar(content: Text("Invalid email or password.")),
@@ -58,10 +64,40 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   }
 
   Future<void> _googleSignIn() async {
-    final GoogleSignIn _googleSignIn = GoogleSignIn();
+    final GoogleSignIn googleSignIn = GoogleSignIn();
     try {
-      await _googleSignIn.signIn();
-      Navigator.pushReplacementNamed(context as BuildContext, '/home');
+      final GoogleSignInAccount? account = await googleSignIn.signIn();
+
+      if (account != null) {
+        final email = account.email;
+        final displayName = account.displayName ?? 'User';
+
+        final db = await _getDatabase();
+        final List<Map<String, dynamic>> users = await db.query(
+          'Users',
+          where: 'email = ?',
+          whereArgs: [email],
+        );
+
+        // Add user to the database if not already present
+        if (users.isEmpty) {
+          await db.insert(
+            'Users',
+            {'email': email, 'username': displayName, 'password': ''},
+          );
+        }
+
+        Navigator.push(
+          context as BuildContext,
+          MaterialPageRoute(
+            builder: (context) => UserHomeScreen(userEmail: email),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context as BuildContext).showSnackBar(
+          SnackBar(content: Text("Google Sign-In cancelled.")),
+        );
+      }
     } catch (error) {
       ScaffoldMessenger.of(context as BuildContext).showSnackBar(
         SnackBar(content: Text("Google Sign-In failed.")),
@@ -112,7 +148,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your email';
-                        } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+\$').hasMatch(value)) {
+                        } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
                           return 'Please enter a valid email';
                         }
                         return null;
@@ -166,7 +202,10 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   Text("Don't have an account?"),
                   TextButton(
                     onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => RegisterScreen()));;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => RegisterScreen()),
+                      );
                     },
                     child: Text('Sign Up'),
                   ),

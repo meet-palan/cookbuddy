@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'screens/general/splash_screen.dart';
 
 void main() {
+
   runApp(CookBuddyApp());
 }
 

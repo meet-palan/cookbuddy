@@ -109,8 +109,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
-                    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+\$')
-                        .hasMatch(value)) {
+                    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
                       return 'Please enter a valid email';
                     }
                     return null;
