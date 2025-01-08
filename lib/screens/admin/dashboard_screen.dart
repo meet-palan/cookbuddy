@@ -3,7 +3,6 @@ import 'package:cookbuddy/screens/admin/user_management_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-
 import 'category_management_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {

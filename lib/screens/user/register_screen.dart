@@ -85,17 +85,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(10.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 80),
+              const SizedBox(height: 30),
               Center(
                 child: Column(
                   children: [
                     Image.asset(
                       'assets/logo.png', // Replace with your app logo
-                      height: 100,
+                      height: 150,
                     ),
                     const SizedBox(height: 20),
                     const Text(

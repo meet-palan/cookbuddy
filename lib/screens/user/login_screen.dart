@@ -66,7 +66,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   children: [
                     Image.asset(
                       'assets/logo.png', // Replace with your app logo
-                      height: 100,
+                      height: 150,
                     ),
                     const SizedBox(height: 20),
                     const Text(
