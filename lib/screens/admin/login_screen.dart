@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../database/database_helper.dart';
-//import 'admin_dashboard_screen.dart';
+import 'dashboard_screen.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   @override
@@ -21,10 +21,23 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       return;
     }
 
+    // Check for hardcoded admin credentials
+    if (email == "meet@gmail.com" && password == "meet06") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => AdminDashboardScreen()),
+      );
+      return;
+    }
+
     try {
+      // Validate against the database if the credentials are incorrect
       bool isValid = await _dbHelper.validateAdminCredentials(email, password);
       if (isValid) {
-        //Navigator.push(context as BuildContext, MaterialPageRoute(builder: (context) => SearchScreen()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => AdminDashboardScreen()),
+        );
       } else {
         _showMessage("Invalid email or password");
       }

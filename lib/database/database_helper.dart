@@ -21,8 +21,9 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'cookbuddy.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Incremented version
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -36,6 +37,7 @@ class DatabaseHelper {
         password TEXT NOT NULL
       )
     ''');
+
     await db.execute('''
       CREATE TABLE Recipes(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,16 +47,21 @@ class DatabaseHelper {
         ingredients TEXT NOT NULL,
         instructions TEXT NOT NULL,
         youtubeLink TEXT,
+        insertedBy TEXT DEFAULT 'admin',
+        image TEXT,
+        time TEXT,
         FOREIGN KEY(categoryId) REFERENCES Categories(id),
         FOREIGN KEY(uploaderId) REFERENCES Users(id)
       )
     ''');
+
     await db.execute('''
       CREATE TABLE Categories(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL
       )
     ''');
+
     await db.execute('''
       CREATE TABLE CommentAndRating(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,6 +73,7 @@ class DatabaseHelper {
         FOREIGN KEY(userId) REFERENCES Users(id)
       )
     ''');
+
     await db.execute('''
       CREATE TABLE Transactions(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +84,7 @@ class DatabaseHelper {
         FOREIGN KEY(recipeId) REFERENCES Recipes(id)
       )
     ''');
+
     await db.execute('''
       CREATE TABLE admin (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,6 +99,26 @@ class DatabaseHelper {
     await db.insert('admin', {'email': 'nandan@gmail.com', 'password': 'nandan18'});
   }
 
+  // OnUpgrade method to handle database schema changes
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS Users(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          password TEXT NOT NULL
+        )
+      ''');
+    }
+  }
+
+  // Add a new recipe to the database
+  Future<void> addRecipe(Map<String, dynamic> recipe) async {
+    final db = await database;
+    await db.insert('Recipes', recipe);
+  }
+
   // Validate Admin Credentials
   Future<bool> validateAdminCredentials(String email, String password) async {
     final db = await database;
@@ -101,7 +130,62 @@ class DatabaseHelper {
     return result.isNotEmpty;
   }
 
-  // Close the database (optional cleanup)
+  Future<bool> validateUserCredentials(String email, String password) async {
+    final db = await database;
+    final result = await db.query(
+      'Users',
+      where: 'email = ? AND password = ?',
+      whereArgs: [email, password],
+    );
+    return result.isNotEmpty;
+  }
+
+  // Add a new user
+  Future<void> addUser(Map<String, dynamic> user) async {
+    final db = await database;
+    await db.insert('Users', user);
+  }
+
+  // Fetch user by email
+  Future<Map<String, dynamic>?> getUserByEmail(String email) async {
+    final db = await database;
+    final List<Map<String, dynamic>> result = await db.query(
+      'Users',
+      where: 'email = ?',
+      whereArgs: [email],
+    );
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  // Add category
+  Future<void> addCategory(Map<String, dynamic> category) async {
+    final db = await database;
+    await db.insert('Categories', category);
+  }
+
+  // Fetch all categories
+  Future<List<Map<String, dynamic>>> getAllCategories() async {
+    final db = await database;
+    return await db.query('Categories');
+  }
+
+  // Add comment and rating
+  Future<void> addCommentAndRating(Map<String, dynamic> commentRating) async {
+    final db = await database;
+    await db.insert('CommentAndRating', commentRating);
+  }
+
+  // Fetch comments and ratings for a recipe
+  Future<List<Map<String, dynamic>>> getCommentsAndRatings(int recipeId) async {
+    final db = await database;
+    return await db.query(
+      'CommentAndRating',
+      where: 'recipeId = ?',
+      whereArgs: [recipeId],
+    );
+  }
+
+  // Close the database
   Future<void> closeDatabase() async {
     if (_database != null) {
       await _database!.close();

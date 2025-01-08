@@ -156,7 +156,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
     switch (index) {
       case 0:
-       // Navigator.push(context as BuildContext, MaterialPageRoute(builder: (context) => SearchScreen()));
+       //Navigator.push(context as BuildContext, MaterialPageRoute(builder: (context) => SearchScreen()));
         break;
       case 1:
         //Navigator.push(context as BuildContext, MaterialPageRoute(builder: (context) => SearchScreen()));

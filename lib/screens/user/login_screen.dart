@@ -1,9 +1,7 @@
+import 'package:flutter/material.dart';
+import 'package:cookbuddy/database/database_helper.dart';
 import 'package:cookbuddy/screens/user/home_screen.dart';
 import 'package:cookbuddy/screens/user/register_screen.dart';
-import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 
 class UserLoginScreen extends StatefulWidget {
   @override
@@ -15,22 +13,11 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-
-  Future<Database> _getDatabase() async {
-    final databasePath = await getDatabasesPath();
-    return openDatabase(
-      join(databasePath, 'cookbuddy.db'),
-    );
-  }
+  bool _obscurePassword = true; // To manage password visibility
 
   Future<bool> _validateUser(String email, String password) async {
-    final db = await _getDatabase();
-    final List<Map<String, dynamic>> users = await db.query(
-      'Users',
-      where: 'email = ? AND password = ?',
-      whereArgs: [email, password],
-    );
-    return users.isNotEmpty;
+    final dbHelper = DatabaseHelper.instance;
+    return await dbHelper.validateUserCredentials(email, password);
   }
 
   void _login() async {
@@ -42,7 +29,7 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      bool isValid = await _validateUser(email, password);
+      final isValid = await _validateUser(email, password);
 
       setState(() {
         _isLoading = false;
@@ -50,58 +37,16 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
 
       if (isValid) {
         Navigator.push(
-          context as BuildContext,
+          context,
           MaterialPageRoute(
             builder: (context) => UserHomeScreen(userEmail: email),
           ),
         );
       } else {
-        ScaffoldMessenger.of(context as BuildContext).showSnackBar(
-          SnackBar(content: Text("Invalid email or password.")),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Invalid email or password.")),
         );
       }
-    }
-  }
-
-  Future<void> _googleSignIn() async {
-    final GoogleSignIn googleSignIn = GoogleSignIn();
-    try {
-      final GoogleSignInAccount? account = await googleSignIn.signIn();
-
-      if (account != null) {
-        final email = account.email;
-        final displayName = account.displayName ?? 'User';
-
-        final db = await _getDatabase();
-        final List<Map<String, dynamic>> users = await db.query(
-          'Users',
-          where: 'email = ?',
-          whereArgs: [email],
-        );
-
-        // Add user to the database if not already present
-        if (users.isEmpty) {
-          await db.insert(
-            'Users',
-            {'email': email, 'username': displayName, 'password': ''},
-          );
-        }
-
-        Navigator.push(
-          context as BuildContext,
-          MaterialPageRoute(
-            builder: (context) => UserHomeScreen(userEmail: email),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context as BuildContext).showSnackBar(
-          SnackBar(content: Text("Google Sign-In cancelled.")),
-        );
-      }
-    } catch (error) {
-      ScaffoldMessenger.of(context as BuildContext).showSnackBar(
-        SnackBar(content: Text("Google Sign-In failed.")),
-      );
     }
   }
 
@@ -111,28 +56,36 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: 100),
-              Text(
-                'Welcome Back!',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange,
+              const SizedBox(height: 100),
+              Center(
+                child: Column(
+                  children: [
+                    Image.asset(
+                      'assets/logo.png', // Replace with your app logo
+                      height: 100,
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Welcome Back!',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Log in to your account to continue.',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 10),
-              Text(
-                'Log in to your account to continue.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-              ),
-              SizedBox(height: 50),
+              const SizedBox(height: 40),
               Form(
                 key: _formKey,
                 child: Column(
@@ -141,27 +94,42 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                       controller: _emailController,
                       decoration: InputDecoration(
                         labelText: 'Email',
+                        prefixIcon: const Icon(Icons.email),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your email';
-                        } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
+                        } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                            .hasMatch(value)) {
                           return 'Please enter a valid email';
                         }
                         return null;
                       },
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     TextFormField(
                       controller: _passwordController,
-                      obscureText: true,
+                      obscureText: _obscurePassword,
                       decoration: InputDecoration(
                         labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       validator: (value) {
@@ -176,55 +144,45 @@ class _UserLoginScreenState extends State<UserLoginScreen> {
                   ],
                 ),
               ),
-              SizedBox(height: 30),
+              const SizedBox(height: 30),
               ElevatedButton(
                 onPressed: _isLoading ? null : _login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange,
-                  padding: EdgeInsets.symmetric(vertical: 15),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: Center(
                   child: _isLoading
-                      ? CircularProgressIndicator(color: Colors.white)
-                      : Text(
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
                     'Log In',
                     style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text("Don't have an account?"),
+                  const Text("Don't have an account?"),
                   TextButton(
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => RegisterScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => RegisterScreen(),
+                        ),
                       );
                     },
-                    child: Text('Sign Up'),
-                  ),
-                ],
-              ),
-              Divider(height: 40, thickness: 1),
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: _googleSignIn,
-                  icon: Icon(Icons.g_mobiledata),
-                  label: Text('Sign in with Google'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    child: const Text(
+                      'Sign Up',
+                      style: TextStyle(color: Colors.orange),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
