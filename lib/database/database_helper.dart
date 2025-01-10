@@ -27,6 +27,7 @@ class DatabaseHelper {
     );
   }
 
+
   // OnCreate method to initialize tables
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
@@ -52,6 +53,7 @@ class DatabaseHelper {
         time TEXT,
         FOREIGN KEY(categoryId) REFERENCES Categories(id),
         FOREIGN KEY(uploaderId) REFERENCES Users(id)
+         FOREIGN KEY(userId) REFERENCES user(id) ON DELETE CASCADE
       )
     ''');
 
@@ -119,6 +121,26 @@ class DatabaseHelper {
     await db.insert('Recipes', recipe);
   }
 
+  // Update recipes on user deletion.
+  Future<void> updateRecipesOnUserDeletion(int userId) async {
+    final db = await database;
+    await db.delete(
+      'Recipes',
+      where: 'userId = ?',
+      whereArgs: [userId],
+    );
+  }
+
+  // Fetch user details (recipes and comments).
+  Future<List<Map<String, dynamic>>> fetchUserDetails(int userId) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT r.name, r.ingredients, r.instructions, r.youtubeLink
+      FROM recipes r
+      WHERE r.userId = ?
+    ''', [userId]);
+  }
+
   // Validate Admin Credentials
   Future<bool> validateAdminCredentials(String email, String password) async {
     final db = await database;
@@ -161,6 +183,15 @@ class DatabaseHelper {
   Future<void> addCategory(Map<String, dynamic> category) async {
     final db = await database;
     await db.insert('Categories', category);
+  }
+  //delete category
+  Future<void> deleteCategory(int categoryId) async {
+    final db = await database;
+    await db.delete(
+      'categories',
+      where: 'id = ?',
+      whereArgs: [categoryId],
+    );
   }
 
   // Fetch all categories

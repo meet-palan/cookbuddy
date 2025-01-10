@@ -24,15 +24,24 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
     final db = await _databaseHelper.database;
     final result = await db.rawQuery(
         '''
-      SELECT Recipes.*, Users.username AS userName 
+      SELECT Recipes.*, 
+             Users.username AS userName 
       FROM Recipes 
-      LEFT JOIN Users ON Recipes.uploaderId = Users.id 
-      WHERE Recipes.insertedBy = "admin"
+      LEFT JOIN Users ON Recipes.uploaderId = Users.id
       '''
     );
     setState(() {
       recipes = result;
     });
+  }
+
+  Future<void> _deleteRecipe(int id) async {
+    final db = await _databaseHelper.database;
+    await db.delete('Recipes', where: 'id = ?', whereArgs: [id]);
+    _fetchRecipes();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Recipe deleted successfully")),
+    );
   }
 
   void _showAddRecipeModal(BuildContext context) {
@@ -128,12 +137,12 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   if (nameController.text.isNotEmpty &&
                       ingredientsController.text.isNotEmpty &&
                       instructionsController.text.isNotEmpty &&
                       selectedCategory != null) {
-                    _databaseHelper.addRecipe({
+                    await _databaseHelper.addRecipe({
                       "name": nameController.text,
                       "ingredients": ingredientsController.text,
                       "instructions": instructionsController.text,
@@ -143,10 +152,13 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                           ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
                           : null,
                       "image": selectedImage?.path,
-                      "insertedBy": "admin",
+                      "insertedBy": "admin", // Admin role
                     });
                     Navigator.pop(context);
                     _fetchRecipes();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Uploaded successfully")),
+                    );
                   }
                 },
                 child: const Text("Upload"),
@@ -171,8 +183,25 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
           final recipe = recipes[index];
           return Card(
             child: ListTile(
+              leading: recipe['image'] != null
+                  ? Image.file(
+                File(recipe['image']),
+                width: 50,
+                height: 50,
+                fit: BoxFit.cover,
+              )
+                  : const Icon(Icons.image, size: 50),
               title: Text(recipe['name'] ?? "Unknown"),
-              subtitle: Text("Preparation Time: ${recipe['time'] ?? 'N/A'}"),
+              subtitle: Text(
+                "Inserted by: ${recipe['insertedBy'] == 'admin' ? 'Admin' : recipe['userName'] ?? 'Unknown'}\n"
+                    "Preparation Time: ${recipe['time'] ?? 'N/A'}",
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () {
+                  _deleteRecipe(recipe['id']);
+                },
+              ),
             ),
           );
         },

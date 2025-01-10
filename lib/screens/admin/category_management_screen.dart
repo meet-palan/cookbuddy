@@ -1,80 +1,91 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:cookbuddy/database/database_helper.dart'; // Import the DatabaseHelper class
 
 class CategoryManagementScreen extends StatefulWidget {
   const CategoryManagementScreen({Key? key}) : super(key: key);
 
   @override
-  _CategoryManagementScreenState createState() => _CategoryManagementScreenState();
+  _CategoryManagementScreenState createState() =>
+      _CategoryManagementScreenState();
 }
 
 class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
-  late Database _db;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   List<Map<String, dynamic>> categories = [];
 
   @override
   void initState() {
     super.initState();
-    _initializeDatabase();
-  }
-
-  Future<void> _initializeDatabase() async {
-    final databasePath = await getDatabasesPath();
-    _db = await openDatabase(
-      join(databasePath, 'cookbuddy.db'),
-    );
-    await _fetchCategories();
+    _fetchCategories();
   }
 
   Future<void> _fetchCategories() async {
-    final result = await _db.query('Categories');
+    final result = await _dbHelper.getAllCategories();
     setState(() {
       categories = result;
     });
   }
 
   Future<void> _addCategory(String categoryName) async {
-    final existing = await _db.query('Categories', where: 'name = ?', whereArgs: [categoryName]);
-    if (existing.isNotEmpty) {
-      _showMessage("This category is already present. Please give a different category.");
+    // Check if the category already exists
+    final existingCategories = categories
+        .where((category) =>
+    category['name'].toString().toLowerCase() ==
+        categoryName.toLowerCase())
+        .toList();
+
+    if (existingCategories.isNotEmpty) {
+      _showSnackBar("Try different category, this is already present.");
       return;
     }
 
-    await _db.insert('Categories', {"name": categoryName});
+    // Insert the category into the database
+    await _dbHelper.addCategory({'name': categoryName});
     await _fetchCategories();
+    _showSnackBar("Category added successfully.");
   }
 
   Future<void> _deleteCategory(int categoryId) async {
-    // Delete category from the table
-    await _db.delete('Categories', where: 'id = ?', whereArgs: [categoryId]);
-
-    // Remove the category from Recipes
-    await _db.update('Recipes', {"category": null}, where: 'categoryId = ?', whereArgs: [categoryId]);
-
-    await _fetchCategories();
+    bool? confirmDelete = await _showConfirmationDialog();
+    if (confirmDelete ?? false) {
+      await _dbHelper.deleteCategory(categoryId);
+      await _fetchCategories();
+      _showSnackBar("Category deleted successfully.");
+    }
   }
 
-  void _showMessage(String message) {
-    showDialog(
-      context: this.context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text("Notice"),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
-          ),
-        ],
-      ),
+  Future<bool?> _showConfirmationDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Delete Category"),
+          content: const Text("Are you sure you want to delete this category?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Delete"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
   void _showAddCategoryModal() {
     final TextEditingController categoryController = TextEditingController();
     showModalBottomSheet(
-      context: this.context,
+      context: context,
       isScrollControlled: true,
       builder: (BuildContext context) => Padding(
         padding: EdgeInsets.only(
@@ -117,7 +128,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Category Management")),
-      body: ListView.builder(
+      body: categories.isEmpty
+          ? const Center(child: Text("No categories available."))
+          : ListView.builder(
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final category = categories[index];

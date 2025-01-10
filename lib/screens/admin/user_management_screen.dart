@@ -1,9 +1,29 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:cookbuddy/database/database_helper.dart';
 
+class UserManagementScreen extends StatelessWidget {
+  const UserManagementScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("User Management"),
+      ),
+      body: const Center(
+        child: Text(
+          "Coming Soon!",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+}
+
+
+
+/*
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({Key? key}) : super(key: key);
 
@@ -12,33 +32,25 @@ class UserManagementScreen extends StatefulWidget {
 }
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
-  late Database _db;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   List<Map<String, dynamic>> users = [];
 
   @override
   void initState() {
     super.initState();
-    _initializeDatabase();
-  }
-
-  Future<void> _initializeDatabase() async {
-    final databasePath = await getDatabasesPath();
-    _db = await openDatabase(
-      join(databasePath, 'cookbuddy.db'),
-    );
-    await _fetchUsers();
+    _fetchUsers();
   }
 
   Future<void> _fetchUsers() async {
-    final result = await _db.query('Users', where: 'role != ?', whereArgs: ['admin']);
+    final result = await _dbHelper.queryUsersExcludingRole('admin');
     setState(() {
       users = result;
     });
   }
 
   Future<void> _deleteUser(int userId, String email) async {
-    await _db.delete('Users', where: 'id = ?', whereArgs: [userId]);
-    await _db.update('Recipes', {"insertedBy": null}, where: 'insertedBy = ?', whereArgs: [userId]);
+    await _dbHelper.deleteUser(userId);
+    await _dbHelper.updateRecipesOnUserDeletion(userId);
     await _sendEmail(email);
     await _fetchUsers();
   }
@@ -47,8 +59,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final Uri emailUri = Uri(
       scheme: 'mailto',
       path: email,
-      query: 'subject=Account Blocked&body=You\'re blocked by Admins and you can\'t log in again. '
-          'If you want access to the application, contact the admin at info@gmail.com.',
+      query: 'subject=Account Blocked&body=You\'re blocked by Admins and can no longer log in. '
+          'For access to the application, contact the admin at info@gmail.com.',
     );
     if (await canLaunchUrl(emailUri)) {
       await launchUrl(emailUri);
@@ -57,10 +69,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   void _showUserDetails(Map<String, dynamic> user) {
     showModalBottomSheet(
-      context: this.context,
+      context: context,
       isScrollControlled: true,
       builder: (_) => FutureBuilder<List<Map<String, dynamic>>>(
-        future: _fetchUserDetails(user['id']),
+        future: _dbHelper.fetchUserDetails(user['id']),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -68,18 +80,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           final details = snapshot.data!;
           return Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Recipes by ${user['name']}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                ...details.map((detail) => ListTile(
-                  title: Text(detail['recipeName']),
-                  onTap: () => _showRecipeDetails(detail),
-                )),
-                const Divider(),
-                Text("Comments by ${user['name']}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                ...details.map((detail) => ListTile(title: Text(detail['comment']))),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Recipes by ${user['username']}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ...details.map((detail) => ListTile(
+                    title: Text(detail['name']),
+                    onTap: () => _showRecipeDetails(detail),
+                  )),
+                ],
+              ),
             ),
           );
         },
@@ -87,13 +98,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Future<List<Map<String, dynamic>>> _fetchUserDetails(int userId) async {
-    return await _db.rawQuery('SELECT * FROM Recipes WHERE insertedBy = ?', [userId]);
-  }
-
   void _showRecipeDetails(Map<String, dynamic> recipe) {
     showModalBottomSheet(
-      context: this.context,
+      context: context,
       builder: (_) => Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -103,6 +110,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             const SizedBox(height: 8),
             Text("Ingredients: ${recipe['ingredients']}"),
             Text("Instructions: ${recipe['instructions']}"),
+            if (recipe['youtubeLink'] != null)
+              TextButton(
+                onPressed: () => launchUrl(Uri.parse(recipe['youtubeLink'])),
+                child: const Text("View on YouTube"),
+              ),
           ],
         ),
       ),
@@ -119,7 +131,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           final user = users[index];
           return Card(
             child: ListTile(
-              title: Text(user['name']),
+              title: Text(user['username']),
               trailing: ElevatedButton(
                 onPressed: () => _deleteUser(user['id'], user['email']),
                 child: const Text("Delete"),
@@ -132,3 +144,5 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 }
+
+ */

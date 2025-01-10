@@ -1,8 +1,7 @@
+import 'package:flutter/material.dart';
+import 'package:cookbuddy/database/database_helper.dart';
 import 'package:cookbuddy/screens/admin/recipe_management_screen.dart';
 import 'package:cookbuddy/screens/admin/user_management_screen.dart';
-import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 import 'category_management_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -13,7 +12,7 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  late Database _db;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
   int totalUsers = 0;
   int totalRecipes = 0;
@@ -27,45 +26,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeDatabase();
-  }
-
-  Future<void> _initializeDatabase() async {
-    final databasePath = await getDatabasesPath();
-    _db = await openDatabase(
-      join(databasePath, 'cookbuddy.db'),
-    );
-    await _fetchStatistics();
+    _fetchStatistics();
   }
 
   Future<void> _fetchStatistics() async {
-    final usersResult = await _db.rawQuery('SELECT COUNT(*) AS total FROM Users');
-    final recipesResult = await _db.rawQuery('SELECT COUNT(*) AS total FROM Recipes');
-    final commentsResult =
-    await _db.rawQuery('SELECT COUNT(*) AS total FROM CommentAndRating WHERE comment IS NOT NULL');
-    final feedbackResult = await _db.rawQuery('SELECT COUNT(*) AS total FROM CommentAndRating');
-    final creditsResult = await _db.rawQuery('SELECT SUM(credits) AS total FROM Users');
-    final purchasesResult = await _db.rawQuery('SELECT COUNT(*) AS total FROM Transactions');
-    final topCategoriesResult = await _db.rawQuery('''
-      SELECT Categories.name, COUNT(Recipes.categoryId) AS count
-      FROM Recipes
-      JOIN Categories ON Recipes.categoryId = Categories.id
-      GROUP BY Recipes.categoryId
-      ORDER BY count DESC
-      LIMIT 5
-    ''');
+    try {
+      // Fetch total users excluding admins
+      final db = await _dbHelper.database;
+      final userCountResult = await db.rawQuery('''
+        SELECT COUNT(*) AS total FROM Users )
+      ''');
 
-    setState(() {
-      totalUsers = usersResult.first['total'] as int;
-      totalRecipes = recipesResult.first['total'] as int;
-      totalComments = commentsResult.first['total'] as int;
-      totalFeedback = feedbackResult.first['total'] as int;
-      totalCredits = (creditsResult.first['total'] ?? 0) as int; // Fixed
-      totalPurchases = purchasesResult.first['total'] as int;
-      topCategories = {
-        for (var row in topCategoriesResult) row['name'] as String: row['count'] as int,
-      };
-    });
+      // Fetch other statistics
+      final recipesCount = await db.rawQuery('SELECT COUNT(*) AS total FROM Recipes');
+      final commentsCount = await db.rawQuery(
+        'SELECT COUNT(*) AS total FROM CommentAndRating WHERE comment IS NOT NULL',
+      );
+      final feedbackCount = await db.rawQuery('SELECT COUNT(*) AS total FROM CommentAndRating');
+      final creditsSum = await db.rawQuery('SELECT SUM(credits) AS total FROM Transactions');
+      final purchasesCount = await db.rawQuery('SELECT COUNT(*) AS total FROM Transactions');
+      final categoriesResult = await db.rawQuery('''
+        SELECT Categories.name, COUNT(Recipes.categoryId) AS count
+        FROM Recipes
+        JOIN Categories ON Recipes.categoryId = Categories.id
+        GROUP BY Recipes.categoryId
+        ORDER BY count DESC
+        LIMIT 5
+      ''');
+
+      setState(() {
+        totalUsers = userCountResult.first['total'] as int;
+        totalRecipes = recipesCount.first['total'] as int;
+        totalComments = commentsCount.first['total'] as int;
+        totalFeedback = feedbackCount.first['total'] as int;
+        totalCredits = (creditsSum.first['total'] ?? 0) as int;
+        totalPurchases = purchasesCount.first['total'] as int;
+        topCategories = {
+          for (var row in categoriesResult) row['name'] as String: row['count'] as int,
+        };
+      });
+    } catch (error) {
+      print('Error fetching statistics: $error');
+    }
   }
 
   @override
@@ -123,17 +125,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => RecipeManagementScreen()),
-            ); // Navigate to Recipe Management
+            );
           } else if (index == 1) {
             Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => CategoryManagementScreen()),
-            );// Navigate to Category Management
+              context,
+              MaterialPageRoute(builder: (context) => CategoryManagementScreen()),
+            );
           } else if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => UserManagementScreen()),
-            ); // Navigate to User Management
+            );
           }
         },
         items: const [
