@@ -13,11 +13,24 @@ class RecipeManagementScreen extends StatefulWidget {
 class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
   List<Map<String, dynamic>> recipes = [];
+  List<Map<String, dynamic>> categories = [];
+  bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchRecipes();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() {
+      isLoading = true;
+    });
+    await _fetchRecipes();
+    await _fetchCategories();
+    setState(() {
+      isLoading = false;
+    });
   }
 
   Future<void> _fetchRecipes() async {
@@ -30,15 +43,20 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
       LEFT JOIN Users ON Recipes.uploaderId = Users.id
       '''
     );
-    setState(() {
-      recipes = result;
-    });
+    recipes = result;
+  }
+
+  Future<void> _fetchCategories() async {
+    final db = await _databaseHelper.database;
+    final result = await db.query('Categories'); // Fetch all categories
+    categories = result;
   }
 
   Future<void> _deleteRecipe(int id) async {
     final db = await _databaseHelper.database;
     await db.delete('Recipes', where: 'id = ?', whereArgs: [id]);
-    _fetchRecipes();
+    await _fetchRecipes();
+    setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Recipe deleted successfully")),
     );
@@ -50,7 +68,7 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
     final TextEditingController instructionsController = TextEditingController();
     final TextEditingController youtubeController = TextEditingController();
     File? selectedImage;
-    String? selectedCategory;
+    int? selectedCategoryId;
     TimeOfDay? selectedTime;
 
     showModalBottomSheet(
@@ -85,6 +103,15 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                 label: const Text("Add Image"),
               ),
               const SizedBox(height: 16),
+              selectedImage != null
+                  ? Image.file(
+                selectedImage!,
+                width: 100,
+                height: 100,
+                fit: BoxFit.cover,
+              )
+                  : const Text("No image selected"),
+              const SizedBox(height: 16),
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(labelText: "Recipe Name"),
@@ -102,18 +129,16 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                 decoration: const InputDecoration(labelText: "Instructions"),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                items: ["Dessert", "Main Course", "Appetizer"]
-                    .map((category) => DropdownMenuItem(
-                  value: category,
-                  child: Text(category),
+              DropdownButtonFormField<int>(
+                value: selectedCategoryId,
+                items: categories
+                    .map((category) => DropdownMenuItem<int>(
+                  value: category['id'],
+                  child: Text(category['name']),
                 ))
                     .toList(),
                 onChanged: (value) {
-                  setState(() {
-                    selectedCategory = value!;
-                  });
+                  selectedCategoryId = value;
                 },
                 decoration: const InputDecoration(labelText: "Select Category"),
               ),
@@ -123,43 +148,64 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                 decoration: const InputDecoration(labelText: "YouTube Link"),
               ),
               const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () async {
-                  final TimeOfDay? time = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay.now(),
-                  );
-                  setState(() {
-                    selectedTime = time;
-                  });
-                },
-                child: const Text("Select Time"),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    selectedTime != null
+                        ? "Selected Time: ${selectedTime!.hour}:${selectedTime!.minute}"
+                        : "No time selected",
+                  ),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final TimeOfDay? time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.now(),
+                        builder: (BuildContext context, Widget? child) {
+                          return MediaQuery(
+                            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+                            child: child!,
+                          );
+                        },
+                      );
+                      setState(() {
+                        selectedTime = time;
+                      });
+                    },
+                    child: const Text("Select Time"),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () async {
-                  if (nameController.text.isNotEmpty &&
-                      ingredientsController.text.isNotEmpty &&
-                      instructionsController.text.isNotEmpty &&
-                      selectedCategory != null) {
-                    await _databaseHelper.addRecipe({
-                      "name": nameController.text,
-                      "ingredients": ingredientsController.text,
-                      "instructions": instructionsController.text,
-                      "categoryId": selectedCategory,
-                      "youtubeLink": youtubeController.text,
-                      "time": selectedTime != null
-                          ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
-                          : null,
-                      "image": selectedImage?.path,
-                      "insertedBy": "admin", // Admin role
-                    });
-                    Navigator.pop(context);
-                    _fetchRecipes();
+                  if (nameController.text.isEmpty ||
+                      ingredientsController.text.isEmpty ||
+                      instructionsController.text.isEmpty ||
+                      selectedCategoryId == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Uploaded successfully")),
+                      const SnackBar(content: Text("Please fill all mandatory fields")),
                     );
+                    return;
                   }
+                  await _databaseHelper.addRecipe({
+                    "name": nameController.text,
+                    "ingredients": ingredientsController.text,
+                    "instructions": instructionsController.text,
+                    "categoryId": selectedCategoryId,
+                    "youtubeLink": youtubeController.text,
+                    "time": selectedTime != null
+                        ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                        : null,
+                    "image": selectedImage?.path,
+                    "insertedBy": "admin", // Admin role
+                  });
+                  Navigator.pop(context);
+                  await _fetchRecipes();
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Uploaded successfully")),
+                  );
                 },
                 child: const Text("Upload"),
               ),
@@ -177,13 +223,15 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
         title: const Text("Recipe Management"),
         centerTitle: true,
       ),
-      body: ListView.builder(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
         itemCount: recipes.length,
         itemBuilder: (context, index) {
           final recipe = recipes[index];
           return Card(
             child: ListTile(
-              leading: recipe['image'] != null
+              leading: recipe['image'] != null && File(recipe['image']).existsSync()
                   ? Image.file(
                 File(recipe['image']),
                 width: 50,
