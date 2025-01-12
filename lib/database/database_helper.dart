@@ -49,11 +49,10 @@ class DatabaseHelper {
         instructions TEXT NOT NULL,
         youtubeLink TEXT,
         insertedBy TEXT DEFAULT 'admin',
-        image TEXT,
+        image BLOB,
         time TEXT,
         FOREIGN KEY(categoryId) REFERENCES Categories(id),
         FOREIGN KEY(uploaderId) REFERENCES Users(id)
-         FOREIGN KEY(userId) REFERENCES user(id) ON DELETE CASCADE
       )
     ''');
 
@@ -71,6 +70,7 @@ class DatabaseHelper {
         userId INTEGER,
         comment TEXT,
         rating INTEGER,
+        timestamp TEXT NOT NULL,
         FOREIGN KEY(recipeId) REFERENCES Recipes(id),
         FOREIGN KEY(userId) REFERENCES Users(id)
       )
@@ -83,6 +83,13 @@ class DatabaseHelper {
         credits INTEGER,
         recipeId INTEGER,
         FOREIGN KEY(userId) REFERENCES Users(id),
+        FOREIGN KEY(recipeId) REFERENCES Recipes(id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE favorites(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipeId INTEGER UNIQUE,
         FOREIGN KEY(recipeId) REFERENCES Recipes(id)
       )
     ''');
@@ -112,7 +119,23 @@ class DatabaseHelper {
           password TEXT NOT NULL
         )
       ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS favorites(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          recipeId INTEGER UNIQUE,
+          FOREIGN KEY(recipeId) REFERENCES Recipes(id)
+        )
+      ''');
     }
+  }
+  Future<Map<String, dynamic>?> getRecipeDetails(int recipeId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> result = await db.query(
+      'Recipes',
+      where: 'id = ?',
+      whereArgs: [recipeId],
+    );
+    return result.isNotEmpty ? result.first : null;
   }
 
   // Add a new recipe to the database
@@ -201,10 +224,11 @@ class DatabaseHelper {
   }
 
   // Add comment and rating
-  Future<void> addCommentAndRating(Map<String, dynamic> commentRating) async {
+  Future<void> addCommentAndRating(Map<String, dynamic> data) async {
     final db = await database;
-    await db.insert('CommentAndRating', commentRating);
+    await db.insert('CommentAndRating', data);
   }
+
 
   // Fetch comments and ratings for a recipe
   Future<List<Map<String, dynamic>>> getCommentsAndRatings(int recipeId) async {
@@ -213,7 +237,80 @@ class DatabaseHelper {
       'CommentAndRating',
       where: 'recipeId = ?',
       whereArgs: [recipeId],
+      orderBy: 'id DESC',
     );
+  }
+
+  Future<String> getCategoryName(int categoryId) async {
+    final db = await database;
+
+    // Query to get the category name from the Categories table
+    final List<Map<String, dynamic>> result = await db.query(
+      'Categories',
+      columns: ['name'], // Fetching only the 'name' column
+      where: 'id = ?',    // Filtering by categoryId
+      whereArgs: [categoryId],
+    );
+
+    if (result.isNotEmpty) {
+      return result.first['name'];
+    } else {
+      return 'Unknown';  // Return 'Unknown' if no category is found
+    }
+  }
+  Future<int> addToFavorites(int recipeId) async {
+    final db = await instance.database;
+    return await db.insert('favorites', {'recipeId': recipeId});
+  }
+
+  // Remove recipe from favorites
+  Future<int> removeFromFavorites(int recipeId) async {
+    final db = await instance.database;
+    return await db.delete(
+      'favorites',
+      where: 'recipeId = ?',
+      whereArgs: [recipeId],
+    );
+  }
+
+  // Check if recipe is in favorites
+  Future<bool> isRecipeFavorite(int recipeId) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'favorites',
+      where: 'recipeId = ?',
+      whereArgs: [recipeId],
+    );
+    return result.isNotEmpty;
+  }
+
+  // Get all favorite recipes
+  Future<List<Map<String, dynamic>>> getAllFavorites() async {
+    final db = await instance.database;
+    final result = await db.query('favorites');
+    return result;
+  }
+  Future<List<Map<String, dynamic>>> getFavoriteRecipes() async {
+    final db = await database;
+    return await db.rawQuery(
+        '''
+    SELECT recipes.* 
+    FROM recipes 
+    INNER JOIN favorites 
+    ON recipes.id = favorites.recipeId
+    '''
+    );
+  }
+  Future<void> toggleFavorite(int recipeId, bool isFavorite) async {
+    final db = await database;
+
+    if (isFavorite) {
+      // Add to favorites
+      await db.insert('favorites', {'recipeId': recipeId});
+    } else {
+      // Remove from favorites
+      await db.delete('favorites', where: 'recipeId = ?', whereArgs: [recipeId]);
+    }
   }
 
   // Close the database

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cookbuddy/database/database_helper.dart';
@@ -35,14 +35,12 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
 
   Future<void> _fetchRecipes() async {
     final db = await _databaseHelper.database;
-    final result = await db.rawQuery(
-        '''
+    final result = await db.rawQuery('''
       SELECT Recipes.*, 
              Users.username AS userName 
       FROM Recipes 
       LEFT JOIN Users ON Recipes.uploaderId = Users.id
-      '''
-    );
+    ''');
     recipes = result;
   }
 
@@ -67,7 +65,7 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
     final TextEditingController ingredientsController = TextEditingController();
     final TextEditingController instructionsController = TextEditingController();
     final TextEditingController youtubeController = TextEditingController();
-    File? selectedImage;
+    Uint8List? selectedImage;
     int? selectedCategoryId;
     TimeOfDay? selectedTime;
 
@@ -92,11 +90,11 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () async {
-                  final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+                  final pickedFile =
+                  await ImagePicker().pickImage(source: ImageSource.gallery);
                   if (pickedFile != null) {
-                    setState(() {
-                      selectedImage = File(pickedFile.path);
-                    });
+                    selectedImage = await pickedFile.readAsBytes();
+                    setState(() {});
                   }
                 },
                 icon: const Icon(Icons.add_a_photo),
@@ -104,7 +102,7 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
               ),
               const SizedBox(height: 16),
               selectedImage != null
-                  ? Image.file(
+                  ? Image.memory(
                 selectedImage!,
                 width: 100,
                 height: 100,
@@ -163,7 +161,8 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                         initialTime: TimeOfDay.now(),
                         builder: (BuildContext context, Widget? child) {
                           return MediaQuery(
-                            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+                            data: MediaQuery.of(context)
+                                .copyWith(alwaysUse24HourFormat: true),
                             child: child!,
                           );
                         },
@@ -184,7 +183,8 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                       instructionsController.text.isEmpty ||
                       selectedCategoryId == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Please fill all mandatory fields")),
+                      const SnackBar(
+                          content: Text("Please fill all mandatory fields")),
                     );
                     return;
                   }
@@ -197,7 +197,7 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                     "time": selectedTime != null
                         ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
                         : null,
-                    "image": selectedImage?.path,
+                    "image": selectedImage,
                     "insertedBy": "admin", // Admin role
                   });
                   Navigator.pop(context);
@@ -229,11 +229,12 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
         itemCount: recipes.length,
         itemBuilder: (context, index) {
           final recipe = recipes[index];
+          final imageBytes = recipe['image'] as Uint8List?;
           return Card(
             child: ListTile(
-              leading: recipe['image'] != null && File(recipe['image']).existsSync()
-                  ? Image.file(
-                File(recipe['image']),
+              leading: imageBytes != null
+                  ? Image.memory(
+                imageBytes,
                 width: 50,
                 height: 50,
                 fit: BoxFit.cover,
