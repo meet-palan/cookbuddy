@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'package:cookbuddy/screens/user/meal_planner_screen.dart';
+import 'package:cookbuddy/screens/user/my_recipes_screen.dart';
 import 'package:cookbuddy/screens/user/search_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
@@ -29,6 +31,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     super.initState();
     _initializeUserData();
     _fetchRecipes();
+    _assignCreditsToExistingUsers();
   }
 
   Future<void> _initializeUserData() async {
@@ -39,6 +42,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         _credits = user['credits'] ?? 0;
       });
     }
+  }
+
+  Future<void> _assignCreditsToExistingUsers() async {
+    await _databaseHelper.assignInitialCredits();
+    await _initializeUserData(); // Update AppBar credits after assigning
   }
 
   /// Fetch recipes with BLOB image data from the database
@@ -82,10 +90,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
     switch (index) {
       case 0:
-      // Navigator.push(
-      //   context,
-      //   MaterialPageRoute(builder: (context) => MyRecipesScreen()),
-      // );
+       Navigator.push(
+         context,
+         MaterialPageRoute(builder: (context) => MyRecipesScreen(userEmail: widget.userEmail)),
+       );
         break;
       case 1:
       // Navigator.push(
@@ -94,10 +102,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       // );
         break;
       case 2:
-      // Navigator.push(
-      //   context,
-      //   MaterialPageRoute(builder: (context) => MealPlannerScreen()),
-      // );
+       Navigator.push(
+         context,
+         MaterialPageRoute(builder: (context) => MealPlannerScreen()),
+       );
         break;
     }
   }
@@ -125,9 +133,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             icon: const Icon(Icons.favorite),
             onPressed: () {
               Navigator.push(
-                 context,
-                 MaterialPageRoute(builder: (context) => FavoriteScreen()),
-               );
+                context,
+                MaterialPageRoute(builder: (context) => FavoriteScreen()),
+              );
             },
           ),
           Row(
@@ -140,10 +148,13 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () {
-               //Navigator.push(
-                 //context,
-                 //MaterialPageRoute(builder: (context) => ProfileScreen(),
-               //);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      ProfileScreen(userEmail: widget.userEmail),
+                ),
+              );
             },
           ),
         ],
@@ -188,7 +199,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     child: ListTile(
                       leading: imageBytes != null && imageBytes.isNotEmpty
                           ? _buildImage(imageBytes)
-                          : const Icon(Icons.image_not_supported, size: 50),
+                          : const Icon(Icons.image_not_supported,
+                          size: 50),
                       title: Text(recipe['recipeName'] ?? 'Unknown'),
                       subtitle: Text("By: ${recipe['insertedBy']}"),
                       onTap: () {

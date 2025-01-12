@@ -35,6 +35,7 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
+        credits INTEGER,
         password TEXT NOT NULL
       )
     ''');
@@ -60,6 +61,14 @@ class DatabaseHelper {
       CREATE TABLE Categories(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        message TEXT
       )
     ''');
 
@@ -143,6 +152,63 @@ class DatabaseHelper {
     final db = await database;
     await db.insert('Recipes', recipe);
   }
+  Future<List<Map<String, dynamic>>> fetchUserRecipes(int userId) async {
+    final db = await database;
+    return await db.rawQuery('''
+    SELECT Recipes.*, 
+           Categories.name AS categoryName
+    FROM Recipes
+    LEFT JOIN Categories ON Recipes.categoryId = Categories.id
+    WHERE Recipes.uploaderId = ?
+  ''', [userId]);
+  }
+  Future<void> addRecipeByUser(Map<String, dynamic> recipeData, String userEmail) async {
+    final db = await database;
+
+    // Find user ID based on email
+    final userResult = await db.query(
+      'Users',
+      columns: ['id', 'username'],
+      where: 'email = ?',
+      whereArgs: [userEmail],
+    );
+
+    if (userResult.isEmpty) {
+      throw Exception("User not found for the given email");
+    }
+
+    final userId = userResult.first['id'];
+    final username = userResult.first['username'];
+
+
+    // Insert the recipe
+    await db.insert(
+      'Recipes',
+      {
+        'name': recipeData['name'],
+        'ingredients': recipeData['ingredients'],
+        'instructions': recipeData['instructions'],
+        'categoryId': recipeData['categoryId'],
+        'youtubeLink': recipeData['youtubeLink'],
+        'time': recipeData['time'],
+        'image': recipeData['image'],
+        'uploaderId': userId,
+        'insertedBy': username, // Add username as "insertedBy"
+      },
+    );
+  }
+
+
+  Future<List<Map<String, dynamic>>> getRecipesByEmail(String email) async {
+    final db = await database;
+    final List<Map<String, dynamic>> result = await db.rawQuery('''
+      SELECT Recipes.*, Users.username AS uploaderName 
+      FROM Recipes 
+      INNER JOIN Users ON Recipes.uploaderId = Users.id
+      WHERE Users.email = ?
+    ''', [email]);
+    return result;
+  }
 
   // Update recipes on user deletion.
   Future<void> updateRecipesOnUserDeletion(int userId) async {
@@ -201,6 +267,19 @@ class DatabaseHelper {
     );
     return result.isNotEmpty ? result.first : null;
   }
+  Future<void> updateUser(Map<String, dynamic> user) async {
+    final db = await database;
+    await db.update(
+      'Users',
+      {
+        'username': user['username'],
+        'email': user['email'],
+        'password': user['password'],
+      },
+      where: 'id = ?',
+      whereArgs: [user['id']],
+    );
+  }
 
   // Add category
   Future<void> addCategory(Map<String, dynamic> category) async {
@@ -230,6 +309,7 @@ class DatabaseHelper {
   }
 
 
+
   // Fetch comments and ratings for a recipe
   Future<List<Map<String, dynamic>>> getCommentsAndRatings(int recipeId) async {
     final db = await database;
@@ -239,6 +319,23 @@ class DatabaseHelper {
       whereArgs: [recipeId],
       orderBy: 'id DESC',
     );
+  }
+  Future<void> subscribeUser(String email, String message) async {
+    final db = await database;
+    await db.insert('subscriptions', {
+      'email': email,
+      'message': message,
+    });
+  }
+
+  Future<bool> isUserSubscribed(String email) async {
+    final db = await database;
+    final result = await db.query(
+      'subscriptions',
+      where: 'email = ?',
+      whereArgs: [email],
+    );
+    return result.isNotEmpty;
   }
 
   Future<String> getCategoryName(int categoryId) async {
@@ -272,6 +369,7 @@ class DatabaseHelper {
       whereArgs: [recipeId],
     );
   }
+
 
   // Check if recipe is in favorites
   Future<bool> isRecipeFavorite(int recipeId) async {
@@ -311,6 +409,16 @@ class DatabaseHelper {
       // Remove from favorites
       await db.delete('favorites', where: 'recipeId = ?', whereArgs: [recipeId]);
     }
+  }
+
+
+  Future<void> assignInitialCredits() async {
+    final db = await database;
+    await db.rawUpdate('''
+      UPDATE Users
+      SET credits = 1000
+      WHERE credits IS NULL OR credits = 0
+    ''');
   }
 
   // Close the database
