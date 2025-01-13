@@ -71,6 +71,17 @@ class DatabaseHelper {
         message TEXT
       )
     ''');
+    await db.execute('''
+      CREATE TABLE SellingRecipes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        categoryId INTEGER,
+        image BLOB,
+        credits INTEGER,
+        userEmail TEXT,
+        FOREIGN KEY (categoryId) REFERENCES Categories(id)
+      )
+    ''');
 
     await db.execute('''
       CREATE TABLE CommentAndRating(
@@ -209,6 +220,36 @@ class DatabaseHelper {
     ''', [email]);
     return result;
   }
+  //recipes for selling
+  Future<void> addSellingRecipe(Map<String, dynamic> recipe) async {
+    final db = await database;
+    await db.insert(
+      'SellingRecipes',
+      recipe,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+  //get recipes which are for selling
+  Future<List<Map<String, dynamic>>> getSellingRecipes() async {
+    final db = await database;
+    return await db.rawQuery('''
+    SELECT sr.*, u.username AS listedBy
+    FROM SellingRecipes sr
+    LEFT JOIN Users u ON sr.userEmail = u.email
+  ''');
+  }
+
+  //checking if same recipe listed or not
+  Future<bool> isRecipeAlreadyListedForSale(String recipeName, String userEmail) async {
+    final db = await database;
+    final result = await db.query(
+      'SellingRecipes',
+      where: 'name = ? AND userEmail = ?',
+      whereArgs: [recipeName, userEmail],
+    );
+    return result.isNotEmpty;
+  }
+
 
   // Update recipes on user deletion.
   Future<void> updateRecipesOnUserDeletion(int userId) async {
@@ -279,6 +320,11 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [user['id']],
     );
+  }
+
+  Future<void> addTransaction(Map<String, dynamic> transaction) async {
+    final db = await database;
+    await db.insert('Transactions', transaction);
   }
 
   // Add category
@@ -411,7 +457,16 @@ class DatabaseHelper {
     }
   }
 
-
+  Future<int> updateUserCredits(int userId, int credits) async {
+    final db = await instance.database;
+    return await db.update(
+      'Users',
+      {'credits': credits},
+      where: 'id = ?',
+      whereArgs: [userId],
+    );
+  }
+  
   Future<void> assignInitialCredits() async {
     final db = await database;
     await db.rawUpdate('''

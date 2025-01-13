@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:cookbuddy/screens/user/meal_planner_screen.dart';
 import 'package:cookbuddy/screens/user/my_recipes_screen.dart';
+import 'package:cookbuddy/screens/user/recipe_selling_screen.dart';
 import 'package:cookbuddy/screens/user/search_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
@@ -49,6 +50,25 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     await _initializeUserData(); // Update AppBar credits after assigning
   }
 
+  /// Periodically refresh credits every 2 seconds
+  void _startCreditsRefresh() {
+    Future.delayed(const Duration(seconds: 2), () async {
+      final user = await _databaseHelper.getUserByEmail(widget.userEmail);
+      if (user != null && user['credits'] != _credits) {
+        setState(() {
+          _credits = user['credits'] ?? 0;
+        });
+      }
+      _startCreditsRefresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   /// Fetch recipes with BLOB image data from the database
   Future<void> _fetchRecipes() async {
     final db = await _databaseHelper.database;
@@ -90,28 +110,29 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
     switch (index) {
       case 0:
-       Navigator.push(
-         context,
-         MaterialPageRoute(builder: (context) => MyRecipesScreen(userEmail: widget.userEmail)),
-       );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => MyRecipesScreen(userEmail: widget.userEmail)),
+        );
         break;
       case 1:
-      // Navigator.push(
-      //   context,
-      //   MaterialPageRoute(builder: (context) => RecipeSellingScreen()),
-      // );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => RecipeSellingPage(currentUserEmail: widget.userEmail)),
+        );
         break;
       case 2:
-       Navigator.push(
-         context,
-         MaterialPageRoute(builder: (context) => MealPlannerScreen()),
-       );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => MealPlannerScreen()),
+        );
         break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    _startCreditsRefresh(); // Start the credits refresh process
     return Scaffold(
       appBar: AppBar(
         title: const Text(

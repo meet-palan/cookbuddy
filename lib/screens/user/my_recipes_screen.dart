@@ -179,25 +179,63 @@ class _MyRecipesScreenState extends State<MyRecipesScreen> {
                     );
                     return;
                   }
-                  await _databaseHelper.addRecipeByUser(
-                    {
-                      "name": nameController.text,
-                      "ingredients": ingredientsController.text,
-                      "instructions": instructionsController.text,
-                      "categoryId": selectedCategoryId,
-                      "youtubeLink": youtubeController.text,
-                      "time": selectedTime != null
-                          ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
-                          : null,
-                      "image": selectedImage,
-                    },
-                    widget.userEmail,
-                  );
-                  Navigator.pop(context);
-                  await _fetchMyRecipes();
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Uploaded successfully")),
+
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text("Upload Options"),
+                      content: const Text("Do you want to sell this recipe?"),
+                      actions: [
+                        TextButton(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _databaseHelper.addRecipeByUser(
+                              {
+                                "name": nameController.text,
+                                "ingredients": ingredientsController.text,
+                                "instructions": instructionsController.text,
+                                "categoryId": selectedCategoryId,
+                                "youtubeLink": youtubeController.text,
+                                "time": selectedTime != null
+                                    ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                                    : null,
+                                "image": selectedImage,
+                              },
+                              widget.userEmail,
+                            );
+                            Navigator.pop(context);
+                            _fetchMyRecipes();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text("Recipe uploaded successfully")),
+                            );
+                          },
+                          child: const Text("Cancel"),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            final isListed =
+                            await _databaseHelper.isRecipeAlreadyListedForSale(
+                                nameController.text, widget.userEmail);
+                            if (isListed) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        "This recipe is already listed for sale.")),
+                              );
+                            } else {
+                              _showSellRecipeModal(
+                                  context,
+                                  nameController.text,
+                                  selectedCategoryId,
+                                  selectedImage);
+                            }
+                          },
+                          child: const Text("Sell"),
+                        ),
+                      ],
+                    ),
                   );
                 },
                 child: const Text("Upload"),
@@ -205,6 +243,49 @@ class _MyRecipesScreenState extends State<MyRecipesScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showSellRecipeModal(
+      BuildContext context, String recipeName, int? categoryId, Uint8List? image) {
+    final TextEditingController creditsController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Sell Recipe"),
+        content: TextField(
+          controller: creditsController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: "Enter Credits to Sell Recipe"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final credits = int.tryParse(creditsController.text);
+              if (credits != null && credits > 0) {
+                await _databaseHelper.addSellingRecipe({
+                  "name": recipeName,
+                  "categoryId": categoryId,
+                  "image": image,
+                  "credits": credits,
+                  "userEmail": widget.userEmail,
+                });
+                Navigator.pop(context);
+                Navigator.pop(context); // Close the add recipe modal
+                _fetchMyRecipes();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Your Recipe listed for sale!")),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Invalid credits value")),
+                );
+              }
+            },
+            child: const Text("Set"),
+          ),
+        ],
       ),
     );
   }

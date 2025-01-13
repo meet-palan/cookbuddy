@@ -45,7 +45,8 @@ dependencies:
   flutter_svg: ^2.0.7
   share_plus: ^10.1.3
   url_launcher: ^6.1.8
-
+  pdf: ^3.11.1
+  file_picker: ^5.2.3
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -73,6 +74,8 @@ flutter:
     - assets/logo.jpg
     - assets/logo.png
     - assets/getstarted.jpeg
+    - assets/fonts/Helvetica.ttf
+    - assets/fonts/Helvetica-Bold.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
