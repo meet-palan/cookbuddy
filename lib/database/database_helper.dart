@@ -79,9 +79,12 @@ class DatabaseHelper {
         image BLOB,
         credits INTEGER,
         userEmail TEXT,
+        ingredients TEXT,
+        instructions TEXT,
         FOREIGN KEY (categoryId) REFERENCES Categories(id)
       )
     ''');
+
 
     await db.execute('''
       CREATE TABLE CommentAndRating(

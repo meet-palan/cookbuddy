@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:cookbuddy/database/database_helper.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class RecipeSellingPage extends StatefulWidget {
-  final String currentUserEmail; // Add current user's email
+  final String currentUserEmail;
 
   RecipeSellingPage({required this.currentUserEmail});
 
@@ -43,6 +45,7 @@ class _RecipeSellingPageState extends State<RecipeSellingPage> {
       );
     }
   }
+
   void _buyRecipe(Map<String, dynamic> recipe) async {
     final dbHelper = DatabaseHelper.instance;
     try {
@@ -73,9 +76,11 @@ class _RecipeSellingPageState extends State<RecipeSellingPage> {
       });
 
       // Validate recipe fields
-      final recipeName = recipe['name'] ?? 'Untitled Recipe';
-      final ingredients = recipe['ingredients'] ?? 'No ingredients provided.';
-      final instructions = recipe['instructions'] ?? 'No instructions provided.';
+      final recipeName = recipe['name']?.toString() ?? 'Untitled Recipe';
+      final ingredients = recipe['ingredients']?.toString() ?? 'No ingredients provided.';
+      final instructions = recipe['instructions']?.toString() ?? 'No instructions provided.';
+
+      print('Recipe Data: name=$recipeName, ingredients=$ingredients, instructions=$instructions');
 
       // Load fonts
       final helvetica = pw.Font.ttf(await rootBundle.load('assets/fonts/Helvetica.ttf'));
@@ -118,25 +123,28 @@ class _RecipeSellingPageState extends State<RecipeSellingPage> {
         ),
       );
 
-      // Save PDF
-      String? outputPath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Recipe PDF',
-        fileName: '$recipeName.pdf',
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
+      // Ask user to pick a custom directory
+      String? outputDir = await FilePicker.platform.getDirectoryPath();
 
-      if (outputPath == null) {
+      if (outputDir == null || outputDir.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save cancelled by user.')),
+          SnackBar(content: Text('Save operation was canceled.')),
         );
         return;
       }
 
-      final file = File(outputPath);
-      await file.writeAsBytes(await pdf.save());
+      // Save PDF to the selected directory
+      final filePath = '$outputDir/$recipeName.pdf';
+      final file = File(filePath);
+      final pdfBytes = await pdf.save();
+
+      if (pdfBytes.isEmpty) {
+        throw Exception('Generated PDF is empty.');
+      }
+
+      await file.writeAsBytes(pdfBytes);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Recipe "$recipeName" saved to $outputPath.')),
+        SnackBar(content: Text('Recipe "$recipeName" saved successfully at $filePath.')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -145,118 +153,6 @@ class _RecipeSellingPageState extends State<RecipeSellingPage> {
     }
   }
 
-//generate pdf with default location
-  /* void _buyRecipe(Map<String, dynamic> recipe) async {
-    final dbHelper = DatabaseHelper.instance;
-    try {
-      // Fetch the buyer's details using their email
-      final buyer = await dbHelper.getUserByEmail(widget.currentUserEmail);
-      if (buyer == null) {
-        throw Exception("Buyer not found.");
-      }
-
-      final buyerCredits = buyer['credits'] ?? 0;
-      final recipeCredits = recipe['credits'] ?? 0;
-
-      if (buyerCredits < recipeCredits) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Insufficient credits to buy this recipe.'),
-          ),
-        );
-        return;
-      }
-
-      // Deduct credits and update the user's credits in the Users table
-      final updatedCredits = buyerCredits - recipeCredits;
-      await dbHelper.updateUserCredits(buyer['id'], updatedCredits);
-
-      // Insert the transaction into the Transactions table
-      await dbHelper.addTransaction({
-        'userId': buyer['id'],
-        'credits': recipeCredits,
-        'recipeId': recipe['id'],
-      });
-
-      // Load Helvetica fonts
-      final helvetica = pw.Font.ttf(await rootBundle.load('assets/fonts/Helvetica.ttf'));
-      final helveticaBold = pw.Font.ttf(await rootBundle.load('assets/fonts/Helvetica-Bold.ttf'));
-
-      // Generate and download the recipe as a PDF
-      final pdf = pw.Document();
-
-      pdf.addPage(
-        pw.Page(
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  recipe['name'] ?? 'Untitled Recipe',
-                  style: pw.TextStyle(
-                    font: helveticaBold,
-                    fontSize: 24,
-                  ),
-                ),
-                pw.SizedBox(height: 16),
-                pw.Text(
-                  'Ingredients:',
-                  style: pw.TextStyle(
-                    font: helveticaBold,
-                    fontSize: 18,
-                  ),
-                ),
-                pw.Text(
-                  recipe['ingredients'] ?? 'No ingredients provided.',
-                  style: pw.TextStyle(
-                    font: helvetica,
-                    fontSize: 14,
-                  ),
-                ),
-                pw.SizedBox(height: 16),
-                pw.Text(
-                  'Instructions:',
-                  style: pw.TextStyle(
-                    font: helveticaBold,
-                    fontSize: 18,
-                  ),
-                ),
-                pw.Text(
-                  recipe['instructions'] ?? 'No instructions provided.',
-                  style: pw.TextStyle(
-                    font: helvetica,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      );
-
-      // Save the PDF to the device's local storage
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/${recipe['name']}.pdf');
-      await file.writeAsBytes(await pdf.save());
-      print('PDF saved to: ${file.path}');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Successfully purchased and downloaded "${recipe['name']}" for $recipeCredits credits.',
-          ),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error purchasing recipe: $e'),
-        ),
-      );
-    }
-  }
-
-  */
 
   @override
   Widget build(BuildContext context) {
