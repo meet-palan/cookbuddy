@@ -250,7 +250,6 @@ class DatabaseHelper {
     return result.isNotEmpty;
   }
 
-
   // Update recipes on user deletion.
   Future<void> updateRecipesOnUserDeletion(int userId) async {
     final db = await database;
@@ -258,6 +257,17 @@ class DatabaseHelper {
       'Recipes',
       where: 'userId = ?',
       whereArgs: [userId],
+    );
+  }
+
+  Future<void> deleteRecipe(int recipeId) async {
+    final db = await database;
+
+    // Perform delete operation
+    await db.delete(
+      'recipes', // Replace 'recipes' with your table name
+      where: 'id = ?', // Specify the condition for deletion
+      whereArgs: [recipeId], // Provide the recipe ID
     );
   }
 
@@ -321,6 +331,56 @@ class DatabaseHelper {
       whereArgs: [user['id']],
     );
   }
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    final db = await instance.database;
+    return await db.query('Users'); // Replace 'Users' with your actual table name
+  }
+// Delete user and their recipes
+  Future<void> deleteUserAndRecipes(int userId) async {
+    final db = await instance.database;
+
+    // Start a transaction to ensure both deletions happen together
+    await db.transaction((txn) async {
+      // Delete recipes associated with the user
+      await txn.delete(
+        'Recipes', // Replace 'Recipes' with your actual recipe table name
+        where: 'uploaderId = ?',
+        whereArgs: [userId],
+      );
+
+      // Delete the user
+      await txn.delete(
+        'Users',
+        where: 'id = ?',
+        whereArgs: [userId],
+      );
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getRecipesByUser(int userId) async {
+    final db = await instance.database;
+
+    // Query the Recipes table to fetch recipes for the given uploaderId
+    final List<Map<String, dynamic>> recipes = await db.query(
+      'Recipes', // Table name
+      where: 'uploaderId = ?', // Condition to filter by userId
+      whereArgs: [userId], // Pass userId as an argument
+      columns: [
+        'id',
+        'name',
+        'categoryId',
+        'ingredients',
+        'instructions',
+        'youtubeLink',
+        'insertedBy',
+        'image',
+        'time'
+      ], // Specify the columns to retrieve
+    );
+
+    return recipes;
+  }
+
 
   Future<void> addTransaction(Map<String, dynamic> transaction) async {
     final db = await database;
@@ -354,6 +414,25 @@ class DatabaseHelper {
     await db.insert('CommentAndRating', data);
   }
 
+  //comment and rating by user
+  Future<List<Map<String, dynamic>>> getCommentsAndRatingsByUser(int userId) async {
+    final db = await database;
+    return await db.rawQuery('''
+    SELECT c.*
+    FROM CommentAndRating c
+    WHERE c.userId = ? 
+  ''', [userId]);
+  }
+
+  //delete comment
+  Future<void> deleteComment(int commentId) async {
+    final db = await database;
+    await db.delete(
+      'CommentAndRating', // Replace with your actual table name
+      where: 'id = ?',
+      whereArgs: [commentId],
+    );
+  }
 
 
   // Fetch comments and ratings for a recipe
@@ -475,6 +554,7 @@ class DatabaseHelper {
       WHERE credits IS NULL OR credits = 0
     ''');
   }
+
 
   // Close the database
   Future<void> closeDatabase() async {

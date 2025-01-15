@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/general/splash_screen.dart';
 
+
 Future<void> main() async {
   runApp(CookBuddyApp());
 }

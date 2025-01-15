@@ -4,7 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:cookbuddy/database/database_helper.dart'; // Replace with the actual path of your DatabaseHelper class.
+import 'package:cookbuddy/database/database_helper.dart';
 import 'package:flutter/services.dart';
 
 class RecipeSellingPage extends StatefulWidget {
@@ -43,8 +43,110 @@ class _RecipeSellingPageState extends State<RecipeSellingPage> {
       );
     }
   }
-
   void _buyRecipe(Map<String, dynamic> recipe) async {
+    final dbHelper = DatabaseHelper.instance;
+    try {
+      final buyer = await dbHelper.getUserByEmail(widget.currentUserEmail);
+      if (buyer == null) {
+        throw Exception("Buyer not found.");
+      }
+
+      final buyerCredits = buyer['credits'] ?? 0;
+      final recipeCredits = recipe['credits'] ?? 0;
+
+      if (buyerCredits < recipeCredits) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Insufficient credits to buy this recipe.')),
+        );
+        return;
+      }
+
+      // Deduct credits
+      final updatedCredits = buyerCredits - recipeCredits;
+      await dbHelper.updateUserCredits(buyer['id'], updatedCredits);
+
+      // Add transaction
+      await dbHelper.addTransaction({
+        'userId': buyer['id'],
+        'credits': recipeCredits,
+        'recipeId': recipe['id'],
+      });
+
+      // Validate recipe fields
+      final recipeName = recipe['name'] ?? 'Untitled Recipe';
+      final ingredients = recipe['ingredients'] ?? 'No ingredients provided.';
+      final instructions = recipe['instructions'] ?? 'No instructions provided.';
+
+      // Load fonts
+      final helvetica = pw.Font.ttf(await rootBundle.load('assets/fonts/Helvetica.ttf'));
+      final helveticaBold = pw.Font.ttf(await rootBundle.load('assets/fonts/Helvetica-Bold.ttf'));
+
+      // Generate PDF
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  recipeName,
+                  style: pw.TextStyle(font: helveticaBold, fontSize: 24),
+                ),
+                pw.SizedBox(height: 16),
+                pw.Text(
+                  'Ingredients:',
+                  style: pw.TextStyle(font: helveticaBold, fontSize: 18),
+                ),
+                pw.Text(
+                  ingredients,
+                  style: pw.TextStyle(font: helvetica, fontSize: 14),
+                ),
+                pw.SizedBox(height: 16),
+                pw.Text(
+                  'Instructions:',
+                  style: pw.TextStyle(font: helveticaBold, fontSize: 18),
+                ),
+                pw.Text(
+                  instructions,
+                  style: pw.TextStyle(font: helvetica, fontSize: 14),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      // Save PDF
+      String? outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Recipe PDF',
+        fileName: '$recipeName.pdf',
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputPath == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save cancelled by user.')),
+        );
+        return;
+      }
+
+      final file = File(outputPath);
+      await file.writeAsBytes(await pdf.save());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Recipe "$recipeName" saved to $outputPath.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error purchasing recipe: $e')),
+      );
+    }
+  }
+
+//generate pdf with default location
+  /* void _buyRecipe(Map<String, dynamic> recipe) async {
     final dbHelper = DatabaseHelper.instance;
     try {
       // Fetch the buyer's details using their email
@@ -153,6 +255,8 @@ class _RecipeSellingPageState extends State<RecipeSellingPage> {
       );
     }
   }
+
+  */
 
   @override
   Widget build(BuildContext context) {

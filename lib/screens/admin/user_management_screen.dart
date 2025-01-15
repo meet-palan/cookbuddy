@@ -1,29 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cookbuddy/database/database_helper.dart';
+import 'recipe_list_screen.dart';
 
-class UserManagementScreen extends StatelessWidget {
-  const UserManagementScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("User Management"),
-      ),
-      body: const Center(
-        child: Text(
-          "Coming Soon!",
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-}
-
-
-
-/*
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({Key? key}) : super(key: key);
 
@@ -32,8 +10,7 @@ class UserManagementScreen extends StatefulWidget {
 }
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
-  List<Map<String, dynamic>> users = [];
+  late Future<List<Map<String, dynamic>>> _userListFuture;
 
   @override
   void initState() {
@@ -41,108 +18,103 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     _fetchUsers();
   }
 
-  Future<void> _fetchUsers() async {
-    final result = await _dbHelper.queryUsersExcludingRole('admin');
+  void _fetchUsers() {
     setState(() {
-      users = result;
+      _userListFuture = DatabaseHelper.instance.getAllUsers();
     });
   }
 
-  Future<void> _deleteUser(int userId, String email) async {
-    await _dbHelper.deleteUser(userId);
-    await _dbHelper.updateRecipesOnUserDeletion(userId);
-    await _sendEmail(email);
-    await _fetchUsers();
-  }
-
-  Future<void> _sendEmail(String email) async {
-    final Uri emailUri = Uri(
-      scheme: 'mailto',
-      path: email,
-      query: 'subject=Account Blocked&body=You\'re blocked by Admins and can no longer log in. '
-          'For access to the application, contact the admin at info@gmail.com.',
-    );
-    if (await canLaunchUrl(emailUri)) {
-      await launchUrl(emailUri);
+  Future<void> _deleteUser(int userId) async {
+    try {
+      await DatabaseHelper.instance.deleteUserAndRecipes(userId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("User and associated recipes deleted.")),
+      );
+      _fetchUsers(); // Refresh the user list
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
     }
-  }
-
-  void _showUserDetails(Map<String, dynamic> user) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => FutureBuilder<List<Map<String, dynamic>>>(
-        future: _dbHelper.fetchUserDetails(user['id']),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final details = snapshot.data!;
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Recipes by ${user['username']}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ...details.map((detail) => ListTile(
-                    title: Text(detail['name']),
-                    onTap: () => _showRecipeDetails(detail),
-                  )),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _showRecipeDetails(Map<String, dynamic> recipe) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(recipe['name'], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text("Ingredients: ${recipe['ingredients']}"),
-            Text("Instructions: ${recipe['instructions']}"),
-            if (recipe['youtubeLink'] != null)
-              TextButton(
-                onPressed: () => launchUrl(Uri.parse(recipe['youtubeLink'])),
-                child: const Text("View on YouTube"),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("User Management")),
-      body: ListView.builder(
-        itemCount: users.length,
-        itemBuilder: (context, index) {
-          final user = users[index];
-          return Card(
-            child: ListTile(
-              title: Text(user['username']),
-              trailing: ElevatedButton(
-                onPressed: () => _deleteUser(user['id'], user['email']),
-                child: const Text("Delete"),
+      appBar: AppBar(
+        title: const Text("User Management"),
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _userListFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(
+              child: Text("Error: ${snapshot.error}"),
+            );
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+              child: Text(
+                "No users found.",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              onTap: () => _showUserDetails(user),
-            ),
+            );
+          }
+
+          final userList = snapshot.data!;
+          return ListView.builder(
+            itemCount: userList.length,
+            itemBuilder: (context, index) {
+              final user = userList[index];
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Text(user['username'][0].toUpperCase()),
+                ),
+                title: Text(user['username']),
+                subtitle: Text("Email: ${user['email']}"),
+                onTap: () {
+                  // Navigate to the Recipe List Screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RecipeListScreen(userId: user['id']),
+                    ),
+                  );
+                },
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Delete User"),
+                        content: const Text(
+                            "Are you sure you want to delete this user and their associated recipes?"),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                            child: const Text("Cancel"),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _deleteUser(user['id']);
+                            },
+                            child: const Text("Delete"),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           );
         },
       ),
     );
   }
 }
-
- */

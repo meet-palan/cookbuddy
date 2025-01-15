@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cookbuddy/database/database_helper.dart';
 import 'package:cookbuddy/screens/admin/recipe_management_screen.dart';
 import 'package:cookbuddy/screens/admin/user_management_screen.dart';
-import 'category_management_screen.dart';
+import 'package:cookbuddy/screens/admin/category_management_screen.dart';
+import 'package:cookbuddy/screens/general/get_started_screen.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({Key? key}) : super(key: key);
@@ -19,61 +24,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     try {
       final db = await _dbHelper.database;
 
-      // Fetch total users
-      final userCountResult = await db.rawQuery(
-          '''
-        SELECT COUNT(*) AS total FROM Users
-        '''
-      );
-
-      // Fetch total recipes
-      final recipesCount = await db.rawQuery(
-          '''
-        SELECT COUNT(*) AS total FROM Recipes
-        '''
-      );
-
-      // Fetch total comments
+      // Fetch statistics from the database
+      final userCountResult = await db.rawQuery('SELECT COUNT(*) AS total FROM Users');
+      final recipesCount = await db.rawQuery('SELECT COUNT(*) AS total FROM Recipes');
       final commentsCount = await db.rawQuery(
-          '''
-        SELECT COUNT(*) AS total FROM CommentAndRating WHERE comment IS NOT NULL
-        '''
-      );
-
-      // Fetch total feedback
-      final feedbackCount = await db.rawQuery(
-          '''
-        SELECT COUNT(*) AS total FROM CommentAndRating
-        '''
-      );
-
-      // Fetch total credits
-      final creditsSum = await db.rawQuery(
-          '''
-        SELECT SUM(credits) AS total FROM Transactions
-        '''
-      );
-
-      // Fetch total purchases
-      final purchasesCount = await db.rawQuery(
-          '''
-        SELECT COUNT(*) AS total FROM Transactions
-        '''
-      );
-
-      // Fetch top categories
+          'SELECT COUNT(*) AS total FROM CommentAndRating WHERE comment IS NOT NULL');
+      final feedbackCount = await db.rawQuery('SELECT COUNT(*) AS total FROM CommentAndRating');
+      final creditsSum = await db.rawQuery('SELECT SUM(credits) AS total FROM Transactions');
+      final purchasesCount = await db.rawQuery('SELECT COUNT(*) AS total FROM Transactions');
       final categoriesResult = await db.rawQuery(
-          '''
-        SELECT Categories.name, COUNT(Recipes.categoryId) AS count
-        FROM Recipes
-        JOIN Categories ON Recipes.categoryId = Categories.id
-        GROUP BY Recipes.categoryId
-        ORDER BY count DESC
-        LIMIT 5
-        '''
-      );
+          'SELECT Categories.name, COUNT(Recipes.categoryId) AS count FROM Recipes '
+              'JOIN Categories ON Recipes.categoryId = Categories.id '
+              'GROUP BY Recipes.categoryId ORDER BY count DESC LIMIT 5');
 
-      // Parse data for the UI
       return {
         "totalUsers": userCountResult.first['total'] as int,
         "totalRecipes": recipesCount.first['total'] as int,
@@ -92,12 +55,100 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  void _logOut(BuildContext context) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => GetStartedScreen()),
+    );
+  }
+
+  // Future<void> _importDatabaseBackup() async {
+  //   try {
+  //     // Get the app's database directory
+  //     final appDir = await getApplicationDocumentsDirectory();
+  //     final dbPath = '${appDir.path}/cookbuddy.db';
+
+  //     // Ensure the database file exists
+  //     if (!await File(dbPath).exists()) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text('Database file does not exist.')),
+  //       );
+  //       return;
+  //     }
+
+  //     // Request storage permissions
+  //     final status = await Permission.storage.request();
+  //     if (!status.isGranted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text('Storage permission is required.')),
+  //       );
+  //       return;
+  //     }
+
+  //     // Prompt the user to select a directory to save the file
+  //     final result = await FilePicker.platform.getDirectoryPath();
+  //     if (result == null) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text('No directory selected.')),
+  //       );
+  //       return;
+  //     }
+
+  //     // Copy the database file to the selected directory
+  //     final targetPath = '$result/database_backup.db';
+  //     final file = File(dbPath);
+  //     await file.copy(targetPath);
+
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text('Database backup downloaded successfully!')),
+  //     );
+  //   } catch (error) {
+  //     print('Error downloading database backup: $error');
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Error downloading database backup: $error')),
+  //     );
+  //   }
+  // }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Admin Dashboard"),
         centerTitle: true,
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'logout') {
+                _logOut(context);
+              } else if (value == 'import_db') {
+                // await _importDatabaseBackup(); // Commented out the import backup code
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: const [
+                    Icon(Icons.logout, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Log Out'),
+                  ],
+                ),
+              ),
+              // PopupMenuItem(
+              //   value: 'import_db',
+              //   child: Row(
+              //     children: const [
+              //       Icon(Icons.upload_file, color: Colors.blue),
+              //       SizedBox(width: 8),
+              //       Text('Import Backup'),
+              //     ],
+              //   ),
+              // ),
+            ],
+          ),
+        ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetchStatistics(),
@@ -162,17 +213,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           if (index == 0) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => RecipeManagementScreen()),
+              MaterialPageRoute(builder: (context) => const RecipeManagementScreen()),
             );
           } else if (index == 1) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => CategoryManagementScreen()),
+              MaterialPageRoute(builder: (context) => const CategoryManagementScreen()),
             );
           } else if (index == 2) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => UserManagementScreen()),
+              MaterialPageRoute(builder: (context) => const UserManagementScreen()),
             );
           }
         },
